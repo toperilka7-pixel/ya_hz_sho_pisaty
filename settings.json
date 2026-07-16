@@ -13,13 +13,13 @@
   },
   "position": {
     "enabled": true,
-    "x": 0,
+    "x": 99999999,
     "y": 10000,
-    "z": 0
+    "z": 9999999
   },
   "utils": {
     "auto-auth": {
-      "enabled": true,
+      "enabled": false,
       "password": "chalol78"
     },
     "anti-afk": {
