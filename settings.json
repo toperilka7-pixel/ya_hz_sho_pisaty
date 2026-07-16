@@ -3,7 +3,7 @@
   "bot-account": {
     "username": "botyara",
     "password": "",
-    "type": "online"
+    "type": "offline"
   },
   "server": {
     "ip": "vidmochky.aternos.me",
