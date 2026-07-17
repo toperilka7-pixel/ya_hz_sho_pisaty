@@ -1039,7 +1039,75 @@ function sendDiscordWebhook(content, color = 0x0099ff) {
       footer: { text: 'Slobos AFK Bot' }
     }]
   });
+// ============================================================
+// DISCORD SLASH COMMAND - /status
+// ============================================================
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+function startDiscordStatusBot() {
+  if (!config.discord || !config.discord.enabled || !config.discord.botToken) {
+    console.log('[DiscordBot] No botToken set - /status command disabled');
+    return;
+  }
+
+  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+  const statusCommand = new SlashCommandBuilder()
+    .setName('status')
+    .setDescription('Показати поточний статус AFK-бота');
+
+  client.once('ready', async () => {
+    console.log(`[DiscordBot] Logged in as ${client.user.tag}`);
+    try {
+      const rest = new REST({ version: '10' }).setToken(config.discord.botToken);
+      const body = [statusCommand.toJSON()];
+      if (config.discord.guildId) {
+        await rest.put(
+          Routes.applicationGuildCommands(config.discord.clientId, config.discord.guildId),
+          { body }
+        );
+        console.log('[DiscordBot] Guild slash command registered');
+      } else {
+        await rest.put(
+          Routes.applicationCommands(config.discord.clientId),
+          { body }
+        );
+        console.log('[DiscordBot] Global slash command registered (may take up to 1h to appear)');
+      }
+    } catch (err) {
+      console.log('[DiscordBot] Failed to register command:', err.message);
+    }
+  });
+
+  client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== 'status') return;
+
+    const uptimeSec = Math.floor((Date.now() - botState.startTime) / 1000);
+    const coords = (bot && bot.entity) ? bot.entity.position : null;
+    const memMB = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🤖 ${config.name} — статус`)
+      .setColor(botState.connected ? 0x4ade80 : 0xf87171)
+      .addFields(
+        { name: 'Стан', value: botState.connected ? '🟢 живий' : '🔴 здох', inline: true },
+        { name: 'Uptime', value: formatUptime(uptimeSec), inline: true },
+        { name: 'Спроб реконекту', value: String(botState.reconnectAttempts), inline: true },
+        { name: 'Пам\'ять', value: `${memMB} MB`, inline: true },
+        { name: 'Сервер', value: `${config.server.ip}:${config.server.port}`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  });
+
+  client.login(config.discord.botToken).catch(err => {
+    console.log('[DiscordBot] Login failed:', err.message);
+  });
+}
+
+startDiscordStatusBot();
   const options = {
     hostname: urlParts.hostname,
     port: 443,
