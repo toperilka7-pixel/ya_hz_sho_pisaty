@@ -559,7 +559,10 @@ function createBot() {
         console.log('[Bot] Throttle kick detected - will use extended reconnect delay');
         botState.wasThrottled = true;
       }
-
+if (reasonStr.includes('duplicate_login')) {
+  console.log('[Bot] Duplicate login detected - old session likely still closing, using extended delay');
+  botState.wasThrottled = true; // перевикористовуємо існуючий механізм подовженої паузи (60-120с)
+}
       if (config.discord && config.discord.events && config.discord.events.disconnect) {
         sendDiscordWebhook(`[!] **Kicked**: ${kickReason}`, 0xff0000);
       }
