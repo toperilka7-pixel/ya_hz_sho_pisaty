@@ -480,6 +480,9 @@ function createBot() {
       // "Timed out" only showed up ~10+ minutes after the real problem started.
       checkTimeoutInterval: 30000
     });
+    bot._client.on('keep_alive', (packet) => {
+      bot._client.write('keep_alive', { keepAliveId: packet.keepAliveId });
+    });
 
     bot.loadPlugin(pathfinder);
 
