@@ -73,12 +73,15 @@
     "place-night": false
   },
   "discord": {
-    "enabled": false,
-    "webhookUrl": "YOUR_DISCORD_WEBHOOK_URL_HERE",
+    "enabled": true,
+    "webhookUrl": "https://discord.com/api/webhooks/1527786730483224576/1xNWq9hBFGoCyI2F2QAJHlUrOAKOfNKi3crFW03XticjUdNtKTuTn9rQGS_IuPoKGjxj",
+    "botToken": "MTUyNzQyMDk0MzY0NTgwMjUzNg.GGjJJh.mpMtPTL4CAV1rSYb2q4jpxORzY7FQ3ff0Humho",
+  "clientId": "1527420943645802536",
+  "guildId": "1527424973180895282",
     "events": {
       "connect": true,
       "disconnect": true,
-      "chat": false
+      "chat": true
     }
   },
   "chat": {
