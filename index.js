@@ -35,7 +35,7 @@ app.get('/', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-          
+
           :root {
             --bg: #0f172a;
             --container-bg: #111827;
@@ -88,7 +88,7 @@ app.get('/', (req, res) => {
             overflow: hidden;
             transition: transform 0.2s;
           }
-          
+
           .card:hover { transform: translateX(5px); }
 
           .label {
@@ -133,11 +133,11 @@ app.get('/', (req, res) => {
             70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(74, 222, 128, 0); }
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
           }
-          
+
           .offline.pulse {
             animation: pulse-offline 2s infinite;
           }
-          
+
           @keyframes pulse-offline {
             0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.7); }
             70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(248, 113, 113, 0); }
@@ -178,7 +178,7 @@ app.get('/', (req, res) => {
       <body>
         <div class="container">
           <h1>🤖 ${config.name}</h1>
-          
+
           <div class="card">
             <div class="label">Status</div>
             <div class="value">
@@ -205,7 +205,7 @@ app.get('/', (req, res) => {
           </div>
 
           <a href="/tutorial" class="btn">📘 View Setup Guide</a>
-          
+
           <div class="footer">Auto-refreshing every 5s</div>
         </div>
 
@@ -224,7 +224,7 @@ app.get('/', (req, res) => {
             try {
               const r = await fetch('/health');
               const data = await r.json();
-              
+
               if (data.status === 'connected') {
                 statusText.innerText = 'Online & Running';
                 statusDot.className = 'dot pulse';
@@ -234,7 +234,7 @@ app.get('/', (req, res) => {
               }
 
               uptimeText.innerText = formatUptime(data.uptime);
-              
+
               if (data.coords) {
                 coordsText.innerText = Math.floor(data.coords.x) + ', ' + Math.floor(data.coords.y) + ', ' + Math.floor(data.coords.z);
               } else {
@@ -253,6 +253,7 @@ app.get('/', (req, res) => {
     </html>
   `);
 });
+
 app.get('/tutorial', (req, res) => {
   res.send(`
   < html >
@@ -385,6 +386,11 @@ let reconnectTimeoutId = null;
 let connectionTimeoutId = null;
 let isReconnecting = false;
 
+// FIX: track consecutive fast socketClosed disconnects - usually means the
+// upstream Minecraft server is offline/unreachable rather than a real bug
+let consecutiveSocketClosed = 0;
+let lastDisconnectTime = 0;
+
 function clearBotTimeouts() {
   if (reconnectTimeoutId) {
     clearTimeout(reconnectTimeoutId);
@@ -412,12 +418,20 @@ function addInterval(callback, delay) {
   return id;
 }
 
-function getReconnectDelay() {
+// FIX: accept consecutiveFails so a run of fast socketClosed disconnects
+// (server likely offline) waits longer instead of hammering reconnects
+function getReconnectDelay(consecutiveFails = 0) {
   if (botState.wasThrottled) {
     botState.wasThrottled = false;
     const throttleDelay = 60000 + Math.floor(Math.random() * 60000);
     console.log(`[Bot] Throttle detected - using extended delay: ${throttleDelay / 1000}s`);
     return throttleDelay;
+  }
+
+  if (consecutiveFails >= 3) {
+    const offlineDelay = 60000; // 1 min - likely the server is offline/unreachable
+    console.log(`[Bot] ${consecutiveFails} fast disconnects in a row - assuming server is offline, waiting ${offlineDelay / 1000}s`);
+    return offlineDelay;
   }
 
   // FIX: read auto-reconnect-delay from settings as base delay
@@ -461,7 +475,10 @@ function createBot() {
       port: config.server.port,
       version: botVersion,
       hideErrors: false,
-      checkTimeoutInterval: 600000
+      // FIX: default (30000ms) restored. The previous 600000ms (10 min) value meant
+      // the client waited 10 minutes to even notice a dead connection, which is why
+      // "Timed out" only showed up ~10+ minutes after the real problem started.
+      checkTimeoutInterval: 30000
     });
 
     bot.loadPlugin(pathfinder);
@@ -491,6 +508,7 @@ function createBot() {
       botState.connected = true;
       botState.lastActivity = Date.now();
       botState.reconnectAttempts = 0;
+      consecutiveSocketClosed = 0; // FIX: reset the offline-streak counter once we actually spawn
       isReconnecting = false;
 
       console.log(`[Bot] [+] Successfully spawned on server! (Version: ${bot.version})`);
@@ -555,12 +573,24 @@ function createBot() {
       clearAllIntervals();
       spawnHandled = false; // reset for next connection
 
+      // FIX: track fast, repeated socketClosed disconnects - usually means the
+      // Minecraft server itself is offline/unreachable rather than a code bug
+      const now = Date.now();
+      const timeSinceLastDisconnect = now - lastDisconnectTime;
+      lastDisconnectTime = now;
+
+      if (reason === 'socketClosed' && timeSinceLastDisconnect < 15000) {
+        consecutiveSocketClosed++;
+      } else {
+        consecutiveSocketClosed = 0;
+      }
+
       if (config.discord && config.discord.events && config.discord.events.disconnect) {
         sendDiscordWebhook(`[-] **Disconnected**: ${reason || 'Unknown'}`, 0xf87171);
       }
 
       // ALWAYS reconnect — bot must never leave the server
-      scheduleReconnect();
+      scheduleReconnect(consecutiveSocketClosed);
     });
 
     bot.on('error', (err) => {
@@ -576,7 +606,8 @@ function createBot() {
   }
 }
 
-function scheduleReconnect() {
+// FIX: accept consecutiveFails and forward it to getReconnectDelay
+function scheduleReconnect(consecutiveFails = 0) {
   clearBotTimeouts();
 
   // FIX: don't stack reconnect if already waiting
@@ -588,7 +619,7 @@ function scheduleReconnect() {
   isReconnecting = true;
   botState.reconnectAttempts++;
 
-  const delay = getReconnectDelay();
+  const delay = getReconnectDelay(consecutiveFails);
   console.log(`[Bot] Reconnecting in ${delay / 1000}s (attempt #${botState.reconnectAttempts})`);
 
   reconnectTimeoutId = setTimeout(() => {
@@ -1039,6 +1070,31 @@ function sendDiscordWebhook(content, color = 0x0099ff) {
       footer: { text: 'Slobos AFK Bot' }
     }]
   });
+
+  const options = {
+    hostname: urlParts.hostname,
+    port: 443,
+    path: urlParts.pathname + urlParts.search,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // FIX: use Buffer.byteLength instead of payload.length - handles non-ASCII (e.g. usernames with accents/emoji)
+      'Content-Length': Buffer.byteLength(payload, 'utf8')
+    }
+  };
+
+  const req = protocol.request(options, (res) => {
+    // Silent success
+  });
+
+  req.on('error', (e) => {
+    console.log(`[Discord] Error sending webhook: ${e.message}`);
+  });
+
+  req.write(payload);
+  req.end();
+}
+
 // ============================================================
 // DISCORD SLASH COMMAND - /status
 // ============================================================
@@ -1091,9 +1147,10 @@ function startDiscordStatusBot() {
       .setTitle(`🤖 ${config.name} — статус`)
       .setColor(botState.connected ? 0x4ade80 : 0xf87171)
       .addFields(
-        { name: 'Стан', value: botState.connected ? '🟢 живий' : '🔴 здох', inline: true },
+        { name: 'Стан', value: botState.connected ? '🟢 Online' : '🔴 Reconnecting', inline: true },
         { name: 'Uptime', value: formatUptime(uptimeSec), inline: true },
         { name: 'Спроб реконекту', value: String(botState.reconnectAttempts), inline: true },
+        { name: 'Координати', value: coords ? `${Math.floor(coords.x)}, ${Math.floor(coords.y)}, ${Math.floor(coords.z)}` : 'невідомо', inline: false },
         { name: 'Пам\'ять', value: `${memMB} MB`, inline: true },
         { name: 'Сервер', value: `${config.server.ip}:${config.server.port}`, inline: true }
       )
@@ -1108,29 +1165,6 @@ function startDiscordStatusBot() {
 }
 
 startDiscordStatusBot();
-  const options = {
-    hostname: urlParts.hostname,
-    port: 443,
-    path: urlParts.pathname + urlParts.search,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // FIX: use Buffer.byteLength instead of payload.length - handles non-ASCII (e.g. usernames with accents/emoji)
-      'Content-Length': Buffer.byteLength(payload, 'utf8')
-    }
-  };
-
-  const req = protocol.request(options, (res) => {
-    // Silent success
-  });
-
-  req.on('error', (e) => {
-    console.log(`[Discord] Error sending webhook: ${e.message}`);
-  });
-
-  req.write(payload);
-  req.end();
-}
 
 // ============================================================
 // CRASH RECOVERY - IMMORTAL MODE
