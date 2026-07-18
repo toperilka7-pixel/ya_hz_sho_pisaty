@@ -478,7 +478,7 @@ function createBot() {
       // FIX: default (30000ms) restored. The previous 600000ms (10 min) value meant
       // the client waited 10 minutes to even notice a dead connection, which is why
       // "Timed out" only showed up ~10+ minutes after the real problem started.
-      checkTimeoutInterval: 99999999999999
+      checkTimeoutInterval: 999999
     });
     bot._client.on('error', (err) => {
     if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
@@ -513,7 +513,8 @@ function createBot() {
       clearBotTimeouts();
       botState.connected = true;
       botState.lastActivity = Date.now();
-      botState.reconnectAttempts = 0;
+      botState.reconnectAttempts = 0
+        ;
       consecutiveSocketClosed = 0; // FIX: reset the offline-streak counter once we actually spawn
       isReconnecting = false;
 
