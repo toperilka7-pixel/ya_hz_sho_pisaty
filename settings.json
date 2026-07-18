@@ -74,10 +74,7 @@
   },
   "discord": {
     "enabled": true,
-    "webhookUrl": "https://discord.com/api/webhooks/1527786730483224576/1xNWq9hBFGoCyI2F2QAJHlUrOAKOfNKi3crFW03XticjUdNtKTuTn9rQGS_IuPoKGjxj",
-    "botToken": "MTUyNzQyMDk0MzY0NTgwMjUzNg.GGjJJh.mpMtPTL4CAV1rSYb2q4jpxORzY7FQ3ff0Humho",
-  "clientId": "1527420943645802536",
-  "guildId": "1527424973180895282",
+    "webhookUrl": "https://discord.com/api/webhooks/1527857279016112250/5cgwu3af80io9RiM__k04bofOFpaJ6zF8mqP9dr_bWzjSpo7A4mqQVxBTfGgA2-AxIMe",
     "events": {
       "connect": true,
       "disconnect": true,
