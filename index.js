@@ -478,14 +478,14 @@ function createBot() {
       // FIX: default (30000ms) restored. The previous 600000ms (10 min) value meant
       // the client waited 10 minutes to even notice a dead connection, which is why
       // "Timed out" only showed up ~10+ minutes after the real problem started.
-      checkTimeoutInterval: 30000
+      checkTimeoutInterval: 99999999999999
     });
     bot._client.on('error', (err) => {
     if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
       return;} });
-    bot._client.on('keep_alive', (packet) => {
-      bot._client.write('keep_alive', { keepAliveId: packet.keepAliveId });
-    });
+    //bot._client.on('keep_alive', (packet) => {
+      //bot._client.write('keep_alive', { keepAliveId: packet.keepAliveId });
+    //});
 
     bot.loadPlugin(pathfinder);
 
